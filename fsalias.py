@@ -24,6 +24,8 @@ commitLog = ""
 commitFile = "/tmp/commitmessage"
 existingDirs = []
 prependDirs = []
+prependSrcDir = ""
+debugFiles = False
 
 
 import codecs
@@ -77,10 +79,20 @@ def prepend (directory):
 
 
 def checkPrepend (rsa):
-    global prependDirs
+    global prependDirs, prependSrcDir
     if (prependDirs != []) and (prependDirs[1] == rsa):
+        prependSrcDir = prependDirs[0]
         prependDirs = []
 
+
+def prependSrc (directory):
+    if prependDirs == []:
+        if prependSrcDir == "":
+            return directory
+        oprintf ("prepending src special case\n")
+        return os.path.join (prependSrcDir, directory)
+    else:
+        return prepend (directory)
 
 #
 #
@@ -142,35 +154,72 @@ def findPathName (name):
 
 
 def copyContents (src, dest, gitdirfile = None):
-    global commitFileNo
-    if lastCommit == None:
-        pass
+    if debugFiles:
+        return pseudoCopyContents (src, dest, gitdirfile)
     else:
+        return realCopyContents (src, dest, gitdirfile)
+
+
+def realCopyContents (src, dest, gitdirfile):
+    global commitFileNo, fs
+    if lastCommit != None:
         filename = patchDirectory + "/patch-scripts/"
         filename += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
         commitFileNo += 1
+        oprintf ("# real copy contents\n")
         if gitdirfile == None:
             safeSystem ("git show %s:%s > %s", lastCommit, src, filename)
         else:
             safeSystem ("git show %s:%s > %s", lastCommit, gitdirfile, filename)
+        if isAllowed (dest):
+            dest = stripAllowed (dest)
+            makeDir (extractPath (dest))
+        else:
+            path, destfile = findPathName (dest)
+            fs[dest] = os.path.join (os.path.join (altDir, path), destfile)
+            dest = fs[dest]
+            makeDir (extractPath (dest))
+        oprintf ("cp -p %s %s || exit 1\n", filename, dest)
+        output.flush ()
+    return dest
+
+
+def pseudoCopyContents (src, dest, gitdirfile):
+    if lastCommit != None:
         dest = stripAllowed (dest)
+        makeDir (extractPath (dest))
+        oprintf ("touch %s\n", dest)
+        output.flush ()
+    return dest
+
+def copyKnown (src, dest):
+    global commitFileNo
+    if lastCommit != None:
+        oprintf ("# copy known\n")
+        filename = patchDirectory + "/patch-scripts/"
+        filename += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        commitFileNo += 1
+        safeSystem ("git show %s:%s > %s", lastCommit, src, filename)
         makeDir (extractPath (dest))
         oprintf ("cp -p %s %s || exit 1\n", filename, dest)
         output.flush ()
 
 
 def makeDir (path):
+    if debugFiles:
+        pseudoMakeDir (path)
+    else:
+        realMakeDir (path)
+
+
+def pseudoMakeDir (path):
+    oprintf ("mkdir -p %s\n", path)
+
+
+def realMakeDir (path):
     global existingDirs
-    if True:
-        # if not (path in existingDirs):
-        oprintf ("mkdir -p %s\n", path)
-        oprintf ("git add %s\n", path)
-        return
-        existingDirs += [path]
-        p = "."
-        for c in path.split (os.path.sep):
-            p = os.path.join (p, c)
-            oprintf ("git add %s\n", p)
+    oprintf ("mkdir -p %s\n", path)
+    oprintf ("git add %s\n", path)
 
 
 def extractPath (filename):
@@ -181,15 +230,17 @@ def extractPath (filename):
 def git_sh_create (fullname, path, filename):
     makeDir (path)
     combined = os.path.join (path, filename)
-    copyContents (fullname, combined)
-    oprintf ("git add %s   # git_sh_create\n", combined)
+    dest = copyContents (fullname, combined)
+    if not debugFiles:
+        oprintf ("git add %s   # git_sh_create\n", dest)
 
 
 def temp_git_sh_create (temp, path, filename):
     combined = os.path.join (path, filename)
     makeDir (extractPath (temp))
-    copyContents (combined, temp)
-    oprintf ("git add %s  # temp_git_sh_create %s\n", temp, lastCommit)
+    dest = copyContents (combined, temp)
+    if not debugFiles:
+        oprintf ("git add %s  # temp_git_sh_create %s\n", dest, lastCommit)
 
 
 def starts_with (line, word):
@@ -237,23 +288,37 @@ def stripAllowed (d):
 #
 
 def create (fullname):
-    global fs
-    printf ("create:  %s\n", fullname)
+    global commitFileNo, fs
+    oprintf ("#\n")
+    oprintf ("# create %s\n", fullname)
+    oprintf ("#\n")
     path, filename = findPathName (prepend (fullname))
     if isAllowed (path):
+        oprintf ("# isAllowed %s\n", path)
         path = stripAllowed (path)
-        git_sh_create (fullname, path, filename)
+        combined = os.path.join (path, filename)
+        if lastCommit != None:
+            filename = patchDirectory + "/patch-scripts/"
+            filename += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+            commitFileNo += 1
+            safeSystem ("git show %s:%s > %s", lastCommit, fullname, filename)
+            makeDir (extractPath (combined))
+            oprintf ("cp -p %s %s || exit 1\n", filename, combined)
+            oprintf ("git add %s\n", combined)
     else:
         fs[fullname] = os.path.join (os.path.join (altDir, path), filename)
+        oprintf ("#   held temporarily in %s\n", fs[fullname])
         temp_git_sh_create (fs[fullname], path, filename)
+    oprintf ("# completed create\n")
 
 
 def modify (fullname):
     path, filename = findPathName (prepend (fullname))
     if fullname in fs:
-        copyContents (fs[fullname], fs[fullname], fullname)
+        copyKnown (fullname, fs[fullname])
     else:
-        copyContents (fullname, prepend (fullname))
+        dest = copyContents (fullname, prepend (fullname))
+        oprintf ("# no need to add %s as it is already known\n", dest)
 
 
 #
@@ -261,6 +326,17 @@ def modify (fullname):
 #
 
 def rm (fullname):
+    if debugFiles:
+        pseudoRm (fullname)
+    else:
+        realRm (fullname)
+
+
+#
+#  realRm - deletes file called name.
+#
+
+def realRm (fullname):
     global fs
     fullname = prepend (fullname)
     if fullname in fs:
@@ -272,10 +348,96 @@ def rm (fullname):
 
 
 #
+#  pseudoRm - deletes file called name.
+#
+
+def pseudoRm (fullname):
+    global fs
+    fullname = prepend (fullname)
+    if fullname in fs:
+        oprintf ("rm %s\n", fs[fullname])
+        del fs[fullname]
+    else:
+        fullname = stripAllowed (fullname)
+        oprintf ("rm %s\n", fullname)
+
+
+#
 #  mv - move file src to dest.
 #
 
 def mv (src, dest):
+    if debugFiles:
+        pseudoMv (src, dest)
+    else:
+        realMv (src, dest)
+
+def translate (path, src = False):
+    global fs
+    if src:
+        if path in fs:
+            oprintf ("%s is in aliasfs\n", path)
+            new_path = fs[path]
+            del fs[path]
+            return new_path
+        else:
+            path = prependSrc (path)
+    else:
+        path = prepend (path)
+    return stripAllowed (path)
+
+
+def realMv (src, dest):
+    global fs
+    oprintf ("#\n")
+    oprintf ("# mv %s %s\n", src, dest)
+    oprintf ("#\n")
+    src = translate (src, True)
+    dpath, filename = findPathName (dest)
+    dest = translate (dest, False)
+    if isAllowed (dpath):
+        oprintf ("# isAllowed %s\n", dpath)
+        makeDir (dpath)
+        oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
+        oprintf ("git mv %s %s || exit 1\n", src, dest)
+    else:
+        fs[dest] = os.path.join (os.path.join (altDir, dpath), filename)
+        makeDir (os.path.join (altDir, dpath))
+        oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
+        oprintf ("git mv %s %s || exit 2\n", src, fs[dest])
+    oprintf ("# completed mv\n")
+
+
+def prevMv (src, dest):
+    global fs
+    dest = prepend (dest)
+    if src in fs:
+        oprintf ("src in aliasfs\n")
+        new_src = fs[src]
+        del fs[src]
+        src = new_src
+    src = prependSrc (src)
+    oprintf ("### mv %s %s\n", src, dest)
+    path, filename = findPathName (dest)
+    if isAllowed (path):
+        path = stripAllowed (path)
+        dest = stripAllowed (dest)
+        src = stripAllowed (src)
+        oprintf ("# isAllowed %s\n", path)
+        makeDir (path)
+        oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
+        oprintf ("git mv %s %s || exit 1\n", src, dest)
+    else:
+        fs[dest] = os.path.join (os.path.join (altDir, path), filename)
+        makeDir (os.path.join (altDir, path))
+        oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
+        oprintf ("git mv %s %s || exit 2\n", src, fs[dest])
+        path, filename = findPathName (src)
+        # oprintf ("git rm %s\n", path)
+    oprintf ("# completed mv\n")
+
+
+def pseudoMv (src, dest):
     global fs
     src = prepend (src)
     dest = prepend (dest)
@@ -290,14 +452,14 @@ def mv (src, dest):
         src = stripAllowed (src)
         makeDir (path)
         oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
-        oprintf ("git mv %s %s || exit 1\n", src, dest)
+        oprintf ("mv %s %s || exit 1\n", src, dest)
     else:
         fs[dest] = os.path.join (os.path.join (altDir, path), filename)
         makeDir (os.path.join (altDir, path))
         oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
-        oprintf ("git mv %s %s || exit 2\n", src, fs[dest])
+        oprintf ("mv %s %s || exit 2\n", src, fs[dest])
         path, filename = findPathName (src)
-        # oprintf ("git rm %s\n", path)
+        oprintf ("rm %s\n", src)
 
 
 def author (name):
@@ -318,11 +480,19 @@ def commitMessage (msg):
 
 
 def addAll (directory):
-    oprintf ("if [ -d %s ] ; then git add --all %s ; fi\n", directory, directory)
+    if not debugFiles:
+        oprintf ("if [ -d %s ] ; then git add --all %s ; fi\n", directory, directory)
 
 
 def commit (rsa):
-    global lastCommit, commitLog
+    if debugFiles:
+        pseudoCommit (rsa)
+    else:
+        realCommit (rsa)
+
+
+def realCommit (rsa):
+    global lastCommit, commitLog, prependSrcDir
 
     addAll ("gcc/gm2")
     addAll ("gcc/m2")
@@ -352,6 +522,19 @@ def commit (rsa):
     finishPatch ()
     initPatch ()
     commitLog = ""
+    if prependSrcDir != "":
+        prependSrcDir = ""
+    checkPrepend (rsa)
+
+
+def pseudoCommit (rsa):
+    lastCommit = rsa
+    filename = patchDirectory + "/patch-scripts/"
+    filename += "%06d.commit-log" % (commitPatchNo)
+    finishPatch ()
+    initPatch ()
+    commitLog = ""
+    oprintf ("echo end of script %06d.sh commit: %s\n", commitPatchNo, commitDate)
     checkPrepend (rsa)
 
 
