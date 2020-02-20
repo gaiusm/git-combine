@@ -57,8 +57,11 @@ def oprintf (format, *args):
 
 
 def safeSystem (format, *args):
-    command = str (format) % args
-    command += " || exit 1\n"
+    varargs = str (format) % args
+    command = varargs
+    command += " || error "
+    command += varargs
+    command += " failed\n"    
     if os.system (command) != 0:
         printf ("error: system (%s) failed\n", command)
         sys.exit (1)
@@ -89,7 +92,7 @@ def prependSrc (directory):
     if prependDirs == []:
         if prependSrcDir == "":
             return directory
-        oprintf ("prepending src special case\n")
+        oprintf ("# prepending src special case\n")
         return os.path.join (prependSrcDir, directory)
     else:
         return prepend (directory)
@@ -108,6 +111,10 @@ def initPatch ():
     printf ("[%06d]\n", commitPatchNo)
     output = open (d, "w")
     oprintf ("#!/bin/bash\n\n")
+    oprintf ("function error () {\n")
+    oprintf ("   echo -e \"\\e[31m$*\\e[0m\"\n")
+    oprintf ("   return 0\n")
+    oprintf ("}\n")
     commitDate = None
     commitAuthor = None
     commitFileNo = 1
@@ -179,7 +186,7 @@ def realCopyContents (src, dest, gitdirfile):
             fs[dest] = os.path.join (os.path.join (altDir, path), destfile)
             dest = fs[dest]
             makeDir (extractPath (dest))
-        oprintf ("cp -p %s %s || exit 1\n", filename, dest)
+        oprintf ("cp -p %s %s || error cp %s %s\n", filename, dest, filename, dest)
         output.flush ()
     return dest
 
@@ -201,7 +208,8 @@ def copyKnown (src, dest):
         commitFileNo += 1
         safeSystem ("git show %s:%s > %s", lastCommit, src, filename)
         makeDir (extractPath (dest))
-        oprintf ("cp -p %s %s || exit 1\n", filename, dest)
+        oprintf ("cp -p %s %s || error cp %s %s\n", filename, dest, filename, dest)
+        oprintf ("git add %s\n", dest)        
         output.flush ()
 
 
@@ -303,12 +311,18 @@ def create (fullname):
             commitFileNo += 1
             safeSystem ("git show %s:%s > %s", lastCommit, fullname, filename)
             makeDir (extractPath (combined))
-            oprintf ("cp -p %s %s || exit 1\n", filename, combined)
+            oprintf ("cp -p %s %s || error cp %s %s\n", filename, combined, filename, combined)
             oprintf ("git add %s\n", combined)
     else:
         fs[fullname] = os.path.join (os.path.join (altDir, path), filename)
         oprintf ("#   held temporarily in %s\n", fs[fullname])
-        temp_git_sh_create (fs[fullname], path, filename)
+        patchfile = patchDirectory + "/patch-scripts/"
+        patchfile += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        commitFileNo += 1
+        safeSystem ("git show %s:%s > %s", lastCommit, fullname, patchfile)
+        makeDir (extractPath (fs[fullname]))
+        oprintf ("cp -p %s %s || error cp %s %s\n", patchfile, fs[fullname],  patchfile, fs[fullname])
+        oprintf ("git add %s\n", fs[fullname])
     oprintf ("# completed create\n")
 
 
@@ -343,9 +357,13 @@ def realRm (fullname):
         oprintf ("git rm %s\n", fs[fullname])
         del fs[fullname]
     else:
-        fullname = stripAllowed (fullname)
-        oprintf ("git rm %s\n", fullname)
-
+        path, filename = findPathName (prepend (fullname))
+        if isAllowed (path):
+            fullname = stripAllowed (fullname)
+            oprintf ("git rm %s\n", fullname)
+        else:
+            oprintf ("echo odd as %s is not allowed and is not in the fsalias\n", fullname)
+            
 
 #
 #  pseudoRm - deletes file called name.
@@ -376,7 +394,7 @@ def translate (path, src = False):
     global fs
     if src:
         if path in fs:
-            oprintf ("%s is in aliasfs\n", path)
+            oprintf ("# %s is in aliasfs\n", path)
             new_path = fs[path]
             del fs[path]
             return new_path
@@ -387,55 +405,31 @@ def translate (path, src = False):
     return stripAllowed (path)
 
 
+def makeMv (src, dest):
+    oprintf ("if [ ! -f %s ] ; then error mv src %s does not exist ; fi\n", src, src)
+    oprintf ("git mv %s %s || error git mv dest into non existant directory %s\n", src, dest, extractPath (dest))
+    
+
 def realMv (src, dest):
     global fs
     oprintf ("#\n")
     oprintf ("# mv %s %s\n", src, dest)
     oprintf ("#\n")
     src = translate (src, True)
-    dpath, filename = findPathName (dest)
-    dest = translate (dest, False)
-    if isAllowed (dpath):
-        oprintf ("# isAllowed %s\n", dpath)
-        makeDir (dpath)
-        oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
-        oprintf ("git mv %s %s || exit 1\n", src, dest)
-    else:
-        fs[dest] = os.path.join (os.path.join (altDir, dpath), filename)
-        makeDir (os.path.join (altDir, dpath))
-        oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
-        oprintf ("git mv %s %s || exit 2\n", src, fs[dest])
-    oprintf ("# completed mv\n")
-
-
-def prevMv (src, dest):
-    global fs
-    dest = prepend (dest)
-    if src in fs:
-        oprintf ("src in aliasfs\n")
-        new_src = fs[src]
-        del fs[src]
-        src = new_src
-    src = prependSrc (src)
-    oprintf ("### mv %s %s\n", src, dest)
-    path, filename = findPathName (dest)
+    path, filename = findPathName (prepend (dest))
     if isAllowed (path):
-        path = stripAllowed (path)
-        dest = stripAllowed (dest)
-        src = stripAllowed (src)
         oprintf ("# isAllowed %s\n", path)
-        makeDir (path)
-        oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
-        oprintf ("git mv %s %s || exit 1\n", src, dest)
+        path = stripAllowed (path)
+        combined = os.path.join (path, filename)
+        makeDir (extractPath (combined))
+        makeMv (src, combined)
     else:
+        oprintf ("# not allowed %s  (%s)\n", path, dest)        
         fs[dest] = os.path.join (os.path.join (altDir, path), filename)
         makeDir (os.path.join (altDir, path))
-        oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
-        oprintf ("git mv %s %s || exit 2\n", src, fs[dest])
-        path, filename = findPathName (src)
-        # oprintf ("git rm %s\n", path)
+        makeMv (src, fs[dest])
     oprintf ("# completed mv\n")
-
+    
 
 def pseudoMv (src, dest):
     global fs
