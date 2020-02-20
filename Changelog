@@ -1,5 +1,9 @@
 20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
 
+	* added libgm2 definition to the .comb files.
+
+20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
+
 	* debianized the repository and also added many
 	  standard configure and Makefile.am components.
 
