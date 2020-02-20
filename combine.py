@@ -268,6 +268,7 @@ def setPatchDir (directory):
 
 
 def main ():
+    print ("Warning git-combine is alpha code")
     handleOptions ()
     if configFile == None:
         print ("the -f argument and configuration filename are manditory")
