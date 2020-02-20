@@ -1,0 +1,30 @@
+#!/bin/bash
+
+WORKINGDIR=$1
+
+if [ "$#" -ne 1 ] ; then
+    echo "tidyup must have a single argument (the directory which contains the gcc git repro)"
+fi
+
+if [ ! -d ${WORKINGDIR} ] ; then
+    echo "cannot see directory: ${WORKINGDIR}"
+    exit 1
+fi
+
+cd ${WORKINGDIR}
+cd gcc
+
+for d in libgm2 gcc/m2 gcc/gm2 gcc/testsuite/gm2 ; do
+   if [ -d ${d} ] ; then
+       for f in `find ${d} -name '*~' -print` ; do
+           rm ${f}
+           git rm ${f}
+       done
+       for f in `find ${d} -type d -empty -print` ; do
+           rmdir ${f}
+           git rm ${f}
+       done
+   fi
+   git commit -a --author="gaius <gaius.mulley@southwales.ac.uk>"  -m "  Removed empty directories"
+done
+

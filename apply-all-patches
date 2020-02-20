@@ -1,0 +1,43 @@
+#!/bin/bash
+
+WORKINGDIR=$1
+
+if [ "$#" -ne 1 ] ; then
+    echo "apply-all-patches must have a single argument (the directory which contains the gcc git repro)"
+fi
+
+if [ ! -d ${WORKINGDIR} ] ; then
+    echo "cannot see directory: ${WORKINGDIR}"
+    exit 1
+fi
+
+cd ${WORKINGDIR}
+cd gcc
+
+git checkout gm2-master
+for p in gcc/m2/patches/gcc/trunk/* ; do
+   patch -p1 < $p
+done
+git commit -a --author="gaius <gaius.mulley@southwales.ac.uk>"  -m "  Applied gm2 patches"
+
+
+git checkout gm2-9
+for p in gcc/gm2/patches/gcc/9.2.0/* ; do
+   patch -p1 < $p
+done
+git commit -a --author="gaius <gaius.mulley@southwales.ac.uk>"  -m "  Applied gm2 patches"
+
+
+git checkout gm2-8
+for p in gcc/gm2/patches/gcc/8.2.0/* ; do
+   patch -p1 < $p
+done
+git commit -a --author="gaius <gaius.mulley@southwales.ac.uk>"  -m "  Applied gm2 patches"
+
+
+git checkout gm2-6
+for p in gcc/gm2/patches/gcc/6.4.0/* ; do
+   patch -p1 < $p
+done
+git commit -a --author="gaius <gaius.mulley@southwales.ac.uk>"  -m "  Applied gm2 patches"
+

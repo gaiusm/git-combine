@@ -1,5 +1,10 @@
 20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
 
+	* modified runtest to remove all empty directories
+          and remove emacs backup files.
+
+20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
+
 	* added libgm2 definition to the .comb files.
 
 20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
