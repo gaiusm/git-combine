@@ -20,9 +20,14 @@ if [ -d ${WORKINGDIR} ] ; then
     rm -rf patch-scripts patch-scripts-9.2.0
     rm -rf patch-scripts-8.2.0 patch-scripts-6.4.0
     python3 combine.py -f gcc+gm2-master.comb
+    ./tidyup ${WORKINGDIR}        
     python3 combine.py -f gcc+gm2-9.2.0.comb
+    ./tidyup ${WORKINGDIR}            
     python3 combine.py -f gcc+gm2-8.2.0.comb
+    ./tidyup ${WORKINGDIR}        
     python3 combine.py -f gcc+gm2-6.4.0.comb
+    ./tidyup ${WORKINGDIR}                
+    ./apply-all-patches ${WORKINGDIR}
 else
     echo "${WORKINGDIR} does not exist"
     exit 1    
