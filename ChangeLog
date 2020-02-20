@@ -1,6 +1,8 @@
 21-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
 
 	* git-combine.in:  completed first implementation.
+	* combine.py:  removed debugging prints and added
+	  -V version option.
 
 20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
 

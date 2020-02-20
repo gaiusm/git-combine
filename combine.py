@@ -46,27 +46,26 @@ debugging = False
 patchDir = None
 reproDir = None
 configFile = None
+VERSION = "0.9"
 
 
 import os, sys, getopt, fsalias, glob, configure
 
 
 def usage (code):
-    print ("git-combine [-v][-h][-d] -f configfile")
+    print ("git-combine [-v][-h][-d][-V] -f configfile")
     print ("   -v  verbose")
     print ("   -d  enable internal debugging")
     print ("   -h  minimal help information")
     print ("   -f  configuration file")
+    print ("   -V  display version")
     sys.exit (code)
 
 
 def handleOptions ():
     global patchDir, reproDir, configFile
-    optlist, l = getopt.getopt (sys.argv[1:], ':vhd:f:r:')
-    print ("optlist =", optlist)
-    print ("list =", l)
+    optlist, l = getopt.getopt (sys.argv[1:], ':vhd:f:r:V')
     for opt in optlist:
-        print (opt)
         if opt[0] == '-h':
             usage (0)
         if opt[0] == '-v':
@@ -77,6 +76,8 @@ def handleOptions ():
             reproDir = opt[1]
         if opt[0] == '-f':
             configFile = opt[1]
+        if opt[0] == '-V':
+            print ("git-combine version ", VERSION)
 
 
 #
