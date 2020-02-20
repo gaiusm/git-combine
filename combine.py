@@ -18,13 +18,15 @@ findBranches      = 'git branch -a'
 findBranchStart   = 'git merge-base master'
 findBranchCommits = 'git log master..remotes/origin/gcc_9_2_0_gm2'
 findBranchHistory = 'git log --name-status'
-
+logFile           = '/tmp/branch-log'
 
 debugging = False
-patchDir = "."
+patchDir = None
 reproDir = None
+configFile = None
 
-import os, sys, getopt, fsalias, glob
+
+import os, sys, getopt, fsalias, glob, configure
 
 
 def usage (code):
@@ -33,8 +35,8 @@ def usage (code):
 
 
 def handleOptions ():
-    global patchDir, reproDir
-    optlist, l = getopt.getopt (sys.argv[1:], ':vhd:r:')
+    global patchDir, reproDir, configFile
+    optlist, l = getopt.getopt (sys.argv[1:], ':vhd:f:r:')
     print ("optlist =", optlist)
     print ("list =", l)
     for opt in optlist:
@@ -47,6 +49,8 @@ def handleOptions ():
             patchDir = opt[1]
         if opt[0] == '-r':
             reproDir = opt[1]
+        if opt[0] == '-f':
+            configFile = opt[1]
 
 
 #
@@ -92,7 +96,13 @@ def getBranchStart (branch):
 
 
 def findLog (branch):
-    localSystem (findBranchHistory + ' ' + branch + ' > /tmp/branch-log')
+    branchList = getBranchList ()
+    for b in branchList:
+        printf ("branch %s starts at %s\n", b, getBranchStart (b))
+        if b == branch:
+            localSystem (findBranchHistory + ' ' + branch + ' > /tmp/branch-log')
+            return True
+    return False
 
 
 def isDigit (ch):
@@ -177,12 +187,65 @@ def createDAGList (logfile):
     reversePatches ()
 
 
+def createPatches ():
+    if patchDir == None:
+        printf ("patchDir has not been set\n")
+        sys.exit (1)
+    else:
+        # os.system ("rm -rf " + patchDir)
+        os.system ("pwd")
+        printf ("should we: rm -rf %s\n", patchDir)
+    fsalias.initPatch ()
+    lines = open (logFile, "rb").readlines ()
+    lines.reverse ()
+    peepCommit (0, lines)
+    for num, line in enumerate (lines):
+        line = line.decode ('ISO-8859-1')
+        line = line.rstrip ()
+        if (len (line) == 0) or (line != line.lstrip ()):
+            fsalias.commitMessage (line)
+        elif isCode (line, 'M'):
+            fsalias.modify (line.split ()[-1])
+        elif isCode (line, 'A'):
+            fsalias.create (line.split ()[-1])
+        elif isCode (line, 'D'):
+            # printf ("delete file: %s\n", line)
+            fsalias.rm (line.split ()[-1])
+        elif isNumCode (line, 'R1') or isNumCode (line, 'R0'):
+            # printf ("mv file: %s\n", line)
+            fsalias.mv (line.split ()[-2], line.split ()[-1])
+        elif isCode (line, 'commit'):
+            fsalias.commit (line.split ()[-1])
+            peepCommit (num+1, lines)
+        elif isCode (line, 'Date:'):
+            line = line.lstrip ()
+            fsalias.date (" ".join (line.split ()[1:]))
+        elif isCode (line, 'Author:'):
+            line = line.lstrip ()
+            fsalias.author (" ".join (line.split ()[1:]))
+        elif isCode (line, "Merge:"):
+            printf ("merge: %s\n", line)
+        else:
+            printf ("unknown: %s\n", line)
+            sys.exit (1)
+    fsalias.finishPatch ()
+    reversePatches ()
+
+
+def setPatchDir (directory):
+    global patchDir
+    patchDir = directory
+    fsalias.patchDir (patchDir)
+
+
 def main ():
     handleOptions ()
+    if configFile != None:
+        configure.config (configFile, findLog, createPatches, setPatchDir)
+
+
+def oldmain ():
     fsalias.patchDir (patchDir)
-    branchList = getBranchList ()
-    for branch in branchList:
-        printf ("branch %s starts at %s\n", branch, getBranchStart (branch))
     findLog (branchList[0])
     fsalias.reproDir (reproDir)
     fsalias.safeDir ("gcc/m2/pre")

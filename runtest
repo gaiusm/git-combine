@@ -10,37 +10,17 @@ echo "creating fresh gcc git"
 rm -rf gcc
 tar xf gcc.tar
 
-echo "creating patch scripts to perform repro combine"
-cd gm2
-git checkout master
-python3 ../combine.py -d $HOME/GM2/gcc-git -r $HOME/GM2/gcc-git/gm2
-cd ..
+python3 combine.py -f gcc+gm2-master.comb
 
-echo "add gm2 onto the gcc repro"
-# exit 0
+exit 0
+
+#
+#  finally apply the gm2 specific patches to gcc
+#
+
 cd gcc
-git checkout master
-git branch gm2-master
-git checkout gm2-master
-echo "create gm2-master branch in the gcc repro"
-n=0
-count=0
-echo "and add every commit from the gm2 repro onto this branch"
-for i in ../patch-scripts/*.sh ; do
-    if ! bash $i ; then
-	echo "failed to combine git repros on script: $i"
-	echo "exit 1"
-    fi
-    ((n+=1))
-    ((count+=1))
-    if [ $n -eq 10 ] ; then
-	echo "$count"
-	n=0
-    fi
-done
-
 for i in gcc/m2/patches/gcc/trunk/* ; do
     patch -p1 < $i
 done
 
-git commit --author="gaius <gaius@gnu.org>"  -m "  Applied gm2 patches"
+git commit --author="gaius <gaius.mulley@southwales.ac.uk>"  -m "  Applied gm2 patches"
