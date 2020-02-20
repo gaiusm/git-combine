@@ -13,7 +13,7 @@ tar xf gcc.tar
 echo "creating patch scripts to perform repro combine"
 cd gm2
 git checkout master
-python3 ../combine.py -d $HOME/GM2/gcc-git
+python3 ../combine.py -d $HOME/GM2/gcc-git -r $HOME/GM2/gcc-git/gm2
 cd ..
 
 echo "add gm2 onto the gcc repro"

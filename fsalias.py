@@ -61,10 +61,16 @@ def safeSystem (format, *args):
     command = varargs
     command += " || error "
     command += varargs
-    command += " failed\n"    
+    command += " failed\n"
     if os.system (command) != 0:
         printf ("error: system (%s) failed\n", command)
         sys.exit (1)
+
+
+def reproDir (directory):
+    global repDir
+    repDir = directory
+
 
 #
 #
@@ -160,24 +166,40 @@ def findPathName (name):
     return p, f
 
 
-def copyContents (src, dest, gitdirfile = None):
+def correctPermissions (old, new):
+    if lastCommit != None:
+        printf ("chmod called (%s, %s)\n", old, new)
+        cwd = os.getcwd ()
+        os.chdir (repDir)
+        command = "git ls-files %s --stage %s > /tmp/fileperm\n" % (lastCommit, old)
+        printf ("command = %s\n", command)
+        if os.system (command) == 0:
+            os.chdir (cwd)
+            line = open ("/tmp/fileperm", "r").readline ()
+            line = line.lstrip ()
+            printf ("line = %s\n", line)        
+            if line == "":
+                printf ("file %s is not in the repro\n", old)
+            else:
+                perm = line.split ()[0][3:]
+                safeSystem ("chmod %s %s\n", perm, new)
+
+
+def copyContents (src, dest):
     if debugFiles:
-        return pseudoCopyContents (src, dest, gitdirfile)
+        return pseudoCopyContents (src, dest)
     else:
-        return realCopyContents (src, dest, gitdirfile)
+        return realCopyContents (src, dest)
 
 
-def realCopyContents (src, dest, gitdirfile):
+def realCopyContents (src, dest):
     global commitFileNo, fs
     if lastCommit != None:
         filename = patchDirectory + "/patch-scripts/"
         filename += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
         commitFileNo += 1
         oprintf ("# real copy contents\n")
-        if gitdirfile == None:
-            safeSystem ("git show %s:%s > %s", lastCommit, src, filename)
-        else:
-            safeSystem ("git show %s:%s > %s", lastCommit, gitdirfile, filename)
+        safeSystem ("git show %s:%s > %s", lastCommit, src, filename)        
         if isAllowed (dest):
             dest = stripAllowed (dest)
             makeDir (extractPath (dest))
@@ -187,6 +209,7 @@ def realCopyContents (src, dest, gitdirfile):
             dest = fs[dest]
             makeDir (extractPath (dest))
         oprintf ("cp -p %s %s || error cp %s %s\n", filename, dest, filename, dest)
+        correctPermissions (src, dest)
         output.flush ()
     return dest
 
@@ -209,7 +232,8 @@ def copyKnown (src, dest):
         safeSystem ("git show %s:%s > %s", lastCommit, src, filename)
         makeDir (extractPath (dest))
         oprintf ("cp -p %s %s || error cp %s %s\n", filename, dest, filename, dest)
-        oprintf ("git add %s\n", dest)        
+        correctPermissions (src, dest)
+        oprintf ("git add %s\n", dest)
         output.flush ()
 
 
@@ -305,14 +329,7 @@ def create (fullname):
         oprintf ("# isAllowed %s\n", path)
         path = stripAllowed (path)
         combined = os.path.join (path, filename)
-        if lastCommit != None:
-            filename = patchDirectory + "/patch-scripts/"
-            filename += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
-            commitFileNo += 1
-            safeSystem ("git show %s:%s > %s", lastCommit, fullname, filename)
-            makeDir (extractPath (combined))
-            oprintf ("cp -p %s %s || error cp %s %s\n", filename, combined, filename, combined)
-            oprintf ("git add %s\n", combined)
+        restoreFile (fullname, combined)
     else:
         fs[fullname] = os.path.join (os.path.join (altDir, path), filename)
         oprintf ("#   held temporarily in %s\n", fs[fullname])
@@ -322,6 +339,7 @@ def create (fullname):
         safeSystem ("git show %s:%s > %s", lastCommit, fullname, patchfile)
         makeDir (extractPath (fs[fullname]))
         oprintf ("cp -p %s %s || error cp %s %s\n", patchfile, fs[fullname],  patchfile, fs[fullname])
+        correctPermissions (fullname, fs[fullname])
         oprintf ("git add %s\n", fs[fullname])
     oprintf ("# completed create\n")
 
@@ -363,7 +381,7 @@ def realRm (fullname):
             oprintf ("git rm %s\n", fullname)
         else:
             oprintf ("echo odd as %s is not allowed and is not in the fsalias\n", fullname)
-            
+
 
 #
 #  pseudoRm - deletes file called name.
@@ -408,7 +426,20 @@ def translate (path, src = False):
 def makeMv (src, dest):
     oprintf ("if [ ! -f %s ] ; then error mv src %s does not exist ; fi\n", src, src)
     oprintf ("git mv %s %s || error git mv dest into non existant directory %s\n", src, dest, extractPath (dest))
-    
+
+
+def restoreFile (oldrepro, combined):
+    global commitFileNo, fs
+    if lastCommit != None:
+        filename = patchDirectory + "/patch-scripts/"
+        filename += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        commitFileNo += 1
+        safeSystem ("git show %s:%s > %s", lastCommit, oldrepro, filename)
+        makeDir (extractPath (combined))
+        oprintf ("cp -p %s %s || error cp %s %s\n", filename, combined, filename, combined)
+        correctPermissions (oldrepro, combined)
+        oprintf ("git add %s\n", combined)
+
 
 def realMv (src, dest):
     global fs
@@ -423,13 +454,15 @@ def realMv (src, dest):
         combined = os.path.join (path, filename)
         makeDir (extractPath (combined))
         makeMv (src, combined)
+        # just in case get the contents from git.
+        restoreFile (dest, combined)
     else:
-        oprintf ("# not allowed %s  (%s)\n", path, dest)        
+        oprintf ("# not allowed %s  (%s)\n", path, dest)
         fs[dest] = os.path.join (os.path.join (altDir, path), filename)
         makeDir (os.path.join (altDir, path))
         makeMv (src, fs[dest])
     oprintf ("# completed mv\n")
-    
+
 
 def pseudoMv (src, dest):
     global fs

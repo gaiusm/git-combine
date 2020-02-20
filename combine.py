@@ -22,6 +22,7 @@ findBranchHistory = 'git log --name-status'
 
 debugging = False
 patchDir = "."
+reproDir = None
 
 import os, sys, getopt, fsalias, glob
 
@@ -32,8 +33,8 @@ def usage (code):
 
 
 def handleOptions ():
-    global patchDir
-    optlist, l = getopt.getopt (sys.argv[1:], ':vhd:')
+    global patchDir, reproDir
+    optlist, l = getopt.getopt (sys.argv[1:], ':vhd:r:')
     print ("optlist =", optlist)
     print ("list =", l)
     for opt in optlist:
@@ -44,6 +45,8 @@ def handleOptions ():
             print ("verbose found")
         if opt[0] == '-d':
             patchDir = opt[1]
+        if opt[0] == '-r':
+            reproDir = opt[1]
 
 
 #
@@ -181,6 +184,7 @@ def main ():
     for branch in branchList:
         printf ("branch %s starts at %s\n", branch, getBranchStart (branch))
     findLog (branchList[0])
+    fsalias.reproDir (reproDir)
     fsalias.safeDir ("gcc/m2/pre")
     # fsalias.prependDir ("gcc-versionno/gcc/gm2", "1e269d8cfa1d57f0e508e43d327827fe15fc1b57")
     # fsalias.prependDir ("gcc-versionno/gcc/gm2", "7750ae1a859853ec2cd7c12147218bca4364af55")
