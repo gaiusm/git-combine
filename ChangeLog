@@ -1,3 +1,7 @@
+21-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
+
+	* git-combine.in:  completed first implementation.
+
 20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
 
 	* modified runtest to remove all empty directories
