@@ -23,6 +23,7 @@ lastCommit = None
 commitLog = ""
 commitFile = "/tmp/commitmessage"
 existingDirs = []
+prependDirs = []
 
 
 import codecs
@@ -59,6 +60,26 @@ def safeSystem (format, *args):
     if os.system (command) != 0:
         printf ("error: system (%s) failed\n", command)
         sys.exit (1)
+
+#
+#
+#
+
+def prependDir (directory, until):
+    global prependDirs
+    prependDirs = [directory, until]
+
+
+def prepend (directory):
+    if prependDirs == []:
+        return directory
+    return os.path.join (prependDirs[0], directory)
+
+
+def checkPrepend (rsa):
+    global prependDirs
+    if (prependDirs != []) and (prependDirs[1] == rsa):
+        prependDirs = []
 
 
 #
@@ -132,6 +153,7 @@ def copyContents (src, dest, gitdirfile = None):
             safeSystem ("git show %s:%s > %s", lastCommit, src, filename)
         else:
             safeSystem ("git show %s:%s > %s", lastCommit, gitdirfile, filename)
+        dest = stripAllowed (dest)
         makeDir (extractPath (dest))
         oprintf ("cp -p %s %s || exit 1\n", filename, dest)
         output.flush ()
@@ -158,8 +180,9 @@ def extractPath (filename):
 
 def git_sh_create (fullname, path, filename):
     makeDir (path)
-    copyContents (fullname, fullname)
-    oprintf ("git add %s   # git_sh_create\n", fullname)
+    combined = os.path.join (path, filename)
+    copyContents (fullname, combined)
+    oprintf ("git add %s   # git_sh_create\n", combined)
 
 
 def temp_git_sh_create (temp, path, filename):
@@ -188,7 +211,6 @@ def top_strip (d):
 
 
 def isAllowed (d):
-    printf ("directory = %s, allowed: ", d)
     orig = top_strip (d)
     for top, allowed in allowedDirs:
         d = orig
@@ -196,10 +218,18 @@ def isAllowed (d):
             d = d[len (top):]
             d = top_strip (d)
             if starts_with (d, allowed):
-                printf ("yes\n")
                 return True
-    printf ("no\n")
     return False
+
+
+def stripAllowed (d):
+    orig = top_strip (d)
+    if isAllowed (orig):
+        for top, allowed in allowedDirs:
+            d = orig
+            if starts_with (d, top):
+                return top_strip (d[len (top):])
+    return d
 
 
 #
@@ -208,9 +238,10 @@ def isAllowed (d):
 
 def create (fullname):
     global fs
-    path, filename = findPathName (fullname)
-    # printf ("path = %s, file = %s\n", path, filename)
+    printf ("create:  %s\n", fullname)
+    path, filename = findPathName (prepend (fullname))
     if isAllowed (path):
+        path = stripAllowed (path)
         git_sh_create (fullname, path, filename)
     else:
         fs[fullname] = os.path.join (os.path.join (altDir, path), filename)
@@ -218,11 +249,11 @@ def create (fullname):
 
 
 def modify (fullname):
-    path, filename = findPathName (fullname)
+    path, filename = findPathName (prepend (fullname))
     if fullname in fs:
         copyContents (fs[fullname], fs[fullname], fullname)
     else:
-        copyContents (fullname, fullname)
+        copyContents (fullname, prepend (fullname))
 
 
 #
@@ -231,10 +262,12 @@ def modify (fullname):
 
 def rm (fullname):
     global fs
+    fullname = prepend (fullname)
     if fullname in fs:
         oprintf ("git rm %s\n", fs[fullname])
         del fs[fullname]
     else:
+        fullname = stripAllowed (fullname)
         oprintf ("git rm %s\n", fullname)
 
 
@@ -244,12 +277,18 @@ def rm (fullname):
 
 def mv (src, dest):
     global fs
+    src = prepend (src)
+    dest = prepend (dest)
     if src in fs:
         new_src = fs[src]
         del fs[src]
         src = new_src
     path, filename = findPathName (dest)
     if isAllowed (path):
+        path = stripAllowed (path)
+        dest = stripAllowed (dest)
+        src = stripAllowed (src)
+        makeDir (path)
         oprintf ("if [ ! -f %s ] ; then exit 1 ; fi\n", src)
         oprintf ("git mv %s %s || exit 1\n", src, dest)
     else:
@@ -278,9 +317,16 @@ def commitMessage (msg):
     commitLog = msg + "\n" + commitLog
 
 
+def addAll (directory):
+    oprintf ("if [ -d %s ] ; then git add --all %s ; fi\n", directory, directory)
+
+
 def commit (rsa):
     global lastCommit, commitLog
 
+    addAll ("gcc/gm2")
+    addAll ("gcc/m2")
+    addAll ("gcc/testsuite")
     lastCommit = rsa
     filename = patchDirectory + "/patch-scripts/"
     filename += "%06d.commit-log" % (commitPatchNo)
@@ -306,6 +352,7 @@ def commit (rsa):
     finishPatch ()
     initPatch ()
     commitLog = ""
+    checkPrepend (rsa)
 
 
 def nextCommit (rsa):

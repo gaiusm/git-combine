@@ -182,11 +182,15 @@ def main ():
         printf ("branch %s starts at %s\n", branch, getBranchStart (branch))
     findLog (branchList[0])
     fsalias.safeDir ("gcc/m2/pre")
+    # fsalias.prependDir ("gcc-versionno/gcc/gm2", "1e269d8cfa1d57f0e508e43d327827fe15fc1b57")
+    # fsalias.prependDir ("gcc-versionno/gcc/gm2", "7750ae1a859853ec2cd7c12147218bca4364af55")
+    fsalias.prependDir ("gcc-versionno/gcc/gm2", "d493ab1cc34f7d11ec79387bbd0b375c8494a644")
     fsalias.allowedDir ("gcc-versionno", "gcc/m2")
     fsalias.allowedDir ("gcc-versionno", "gcc/gm2")
     fsalias.allowedDir ("gcc-versionno", "gcc/testsuite/gm2")
     fsalias.allowedDir ("gcc-versionno", "gcc/testsuite/lib")
     fsalias.allowedDir ("gcc-versionno", "libgm2")
+
     createDAGList ('/tmp/branch-log')
 
 
