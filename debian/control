@@ -9,7 +9,7 @@ Build-Depends:
  autotools-dev,
  dh-python,
  python-setuptools,
- python
+ python,
  python3
 Standards-Version: 3.9.5
 X-Python-Version: >= 2.3
