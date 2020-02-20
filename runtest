@@ -1,26 +1,30 @@
 #!/bin/bash
 
-cd $HOME/GM2/gcc-git
+WORKINGDIR=$HOME/GM2/gcc-git
 
-echo "creating fresh gm2 git"
-rm -rf gm2
-tar xf gm2.tar
+if [ -d ${WORKINGDIR} ] ; then
+    cd ${WORKINGDIR}
 
-echo "creating fresh gcc git"
-rm -rf gcc
-tar xf gcc.tar
+    echo "creating fresh gm2 git, this is the inc reprository"
 
-python3 combine.py -f gcc+gm2-master.comb
+    rm -rf gm2
+    tar xf gm2.tar
 
-exit 0
+    echo "creating fresh gcc git, this is the des reprository"
 
-#
-#  finally apply the gm2 specific patches to gcc
-#
+    rm -rf gcc
+    tar xf gcc.tar
 
-cd gcc
-for i in gcc/m2/patches/gcc/trunk/* ; do
-    patch -p1 < $i
-done
+    echo "creating patch scripts and combining: des += inc"
 
-git commit --author="gaius <gaius.mulley@southwales.ac.uk>"  -m "  Applied gm2 patches"
+    rm -rf patch-scripts patch-scripts-9.2.0
+    rm -rf patch-scripts-8.2.0 patch-scripts-6.4.0
+    python3 combine.py -f gcc+gm2-master.comb
+    python3 combine.py -f gcc+gm2-9.2.0.comb
+    python3 combine.py -f gcc+gm2-8.2.0.comb
+    python3 combine.py -f gcc+gm2-6.4.0.comb
+else
+    echo "${WORKINGDIR} does not exist"
+    exit 1    
+fi
+

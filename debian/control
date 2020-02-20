@@ -1,0 +1,23 @@
+Source: git-combine
+Section: python
+Priority: optional
+Maintainer: Gaius Mulley <gaius@southwales.ac.uk>
+Build-Depends:
+ debhelper (>= 9),
+ automake,
+ autoconf,
+ autotools-dev,
+ dh-python,
+ python-setuptools,
+ python
+Standards-Version: 3.9.5
+X-Python-Version: >= 2.3
+
+Package: git-combine
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, python, python-pygame
+Suggests:
+Conflicts:
+Description: git-combine is a tool for combining git reprositories.
+ It is configurable from a .comb script and will combine two
+ repositories.

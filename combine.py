@@ -1,6 +1,28 @@
 #!/usr/bin/env python3
 
+# combine.py top level module which combines two git reprositories.
 #
+# Copyright (C) 2020 Free Software Foundation, Inc.
+# Contributed by Gaius Mulley <gaius@glam.ac.uk>.
+#
+# This file is part of git-combine.
+#
+# git-combine is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3, or (at your option)
+# any later version.
+#
+# git-combine is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GNU Modula-2; see the file COPYING.  If not, write to the
+# Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.
+#
+
 #  a script to merge two repositories together
 #  (the gm2 repository and the gcc repository).
 #  It builds:
@@ -30,7 +52,11 @@ import os, sys, getopt, fsalias, glob, configure
 
 
 def usage (code):
-    print ("git-combine [-v][-h] startdir")
+    print ("git-combine [-v][-h][-d] -f configfile")
+    print ("   -v  verbose")
+    print ("   -d  enable internal debugging")
+    print ("   -h  minimal help information")
+    print ("   -f  configuration file")
     sys.exit (code)
 
 
@@ -128,6 +154,7 @@ def isCode (line, code):
 
 
 def reversePatches ():
+    fsalias.chCurDir ()
     files = glob.glob ("%s/*.sh" % (patchDir))
     files.sort ()
     n = len (files)
@@ -194,7 +221,7 @@ def createPatches ():
     else:
         # os.system ("rm -rf " + patchDir)
         os.system ("pwd")
-        printf ("should we: rm -rf %s\n", patchDir)
+        printf ("should we: rm -rf %s/*.{sh,contents}\n", patchDir)
     fsalias.initPatch ()
     lines = open (logFile, "rb").readlines ()
     lines.reverse ()
@@ -229,6 +256,7 @@ def createPatches ():
             printf ("unknown: %s\n", line)
             sys.exit (1)
     fsalias.finishPatch ()
+    fsalias.chCurDir ()
     reversePatches ()
 
 
@@ -240,25 +268,11 @@ def setPatchDir (directory):
 
 def main ():
     handleOptions ()
-    if configFile != None:
+    if configFile == None:
+        print ("the -f argument and configuration filename are manditory")
+        usage (1)
+    else:
         configure.config (configFile, findLog, createPatches, setPatchDir)
-
-
-def oldmain ():
-    fsalias.patchDir (patchDir)
-    findLog (branchList[0])
-    fsalias.reproDir (reproDir)
-    fsalias.safeDir ("gcc/m2/pre")
-    # fsalias.prependDir ("gcc-versionno/gcc/gm2", "1e269d8cfa1d57f0e508e43d327827fe15fc1b57")
-    # fsalias.prependDir ("gcc-versionno/gcc/gm2", "7750ae1a859853ec2cd7c12147218bca4364af55")
-    fsalias.prependDir ("gcc-versionno/gcc/gm2", "d493ab1cc34f7d11ec79387bbd0b375c8494a644")
-    fsalias.allowedDir ("gcc-versionno", "gcc/m2")
-    fsalias.allowedDir ("gcc-versionno", "gcc/gm2")
-    fsalias.allowedDir ("gcc-versionno", "gcc/testsuite/gm2")
-    fsalias.allowedDir ("gcc-versionno", "gcc/testsuite/lib")
-    fsalias.allowedDir ("gcc-versionno", "libgm2")
-
-    createDAGList ('/tmp/branch-log')
 
 
 main ()

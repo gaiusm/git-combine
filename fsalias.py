@@ -1,12 +1,36 @@
 #!/usr/bin/env python3
 
+# fsalias.py a filesystem alias module used by git-combine
+#
+# Copyright (C) 2020 Free Software Foundation, Inc.
+# Contributed by Gaius Mulley <gaius@glam.ac.uk>.
+#
+# This file is part of git-combine.
+#
+# git-combine is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3, or (at your option)
+# any later version.
+#
+# git-combine is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GNU Modula-2; see the file COPYING.  If not, write to the
+# Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.
+#
+
+
 #
 #  a module to implement a filesystem alias
 #  it allows the callee to create files and directories which are aliased to
 #  other locations.
 #
 
-import os, sys
+import os, sys, glob
 
 poisonedDirs = []
 altDir = ""
@@ -28,19 +52,6 @@ prependSrcDir = ""
 debugFiles = False
 indDir = None
 desDir = None
-
-
-import codecs
-
-def slashescape(err):
-    """ codecs error handler. err is UnicodeDecode instance. return
-    a tuple with a replacement for the unencodable part of the input
-    and a position where encoding should continue"""
-    thebyte = err.object[err.start:err.end]
-    repl = u'\\x'+hex (ord (thebyte))[2:]
-    return (repl, err.end)
-
-codecs.register_error ('slashescape', slashescape)
 
 
 #
@@ -122,6 +133,7 @@ def initPatch ():
     global commitPatchNo, patchOpen, output, commitAuthor, commitDate, commitFileNo
     commitPatchNo +=1
     d = patchDirectory
+    chCurDir ()
     safeSystem ("mkdir -p %s", d)
     d += "/%06d.sh"
     d = d % commitPatchNo
@@ -130,6 +142,10 @@ def initPatch ():
     oprintf ("#!/bin/bash\n\n")
     oprintf ("function error () {\n")
     oprintf ("   echo -e \"\\e[31m$*\\e[0m\"\n")
+    oprintf ("   return 0\n")
+    oprintf ("}\n\n")
+    oprintf ("function note () {\n")
+    oprintf ("   echo -e \"\\e[34m$*\\e[0m\"\n")
     oprintf ("   return 0\n")
     oprintf ("}\n")
     commitDate = None
@@ -177,27 +193,40 @@ def findPathName (name):
     return p, f
 
 
+def chIncDir ():
+    os.chdir (currentDir)
+    os.chdir (incDir)
+
+
+def chDesDir ():
+    os.chdir (currentDir)
+    os.chdir (desDir)
+
+
+def chCurDir ():
+    os.chdir (currentDir)
+
+
 def correctPermissions (old, new):
     if lastCommit != None:
-        os.chdir (currentDir)
-        os.chdir (incDir)
-        printf ("chmod called (%s, %s)\n", old, new)
-        command = "git ls-files %s --stage %s > /tmp/fileperm\n" % (lastCommit, old)
-        printf ("command = %s\n", command)
+        chIncDir ()
+        command = "git show %s -- %s > /tmp/fileperm\n" % (lastCommit, old)
+        # printf ("command = %s\n", command)
         if os.system (command) == 0:
-            line = open ("/tmp/fileperm", "r").readline ()
-            line = line.lstrip ()
-            printf ("line = %s\n", line)
-            if line == "":
-                printf ("no need to correct permissions for file %s\n", old)
-                os.system ("pwd")
-                # sys.exit (1)
-            else:
-                perm = line.split ()[0][3:]
-                os.chdir (currentDir)
-                os.chdir (desDir)
-                safeSystem ("chmod %s %s\n", perm, new)
-        os.chdir (currentDir)
+            chCurDir ()
+            next_line = False
+            for line in open ("/tmp/fileperm", "rb").readlines ():
+                line = line.decode ('ISO-8859-1')
+                # printf ("line = %s\n", line)
+                if starts_with (line, "diff --git"):
+                    next_line = True
+                elif next_line:
+                    if starts_with (line, "new file mode"):
+                        line = line.rstrip ()
+                        perm = line.split ()[-1][3:]
+                        oprintf ("note changing file permissions of %s to %s\n", new, perm)
+                        oprintf ("chmod %s %s\n", perm, new)
+                        return
 
 
 def copyContents (src, dest):
@@ -210,12 +239,11 @@ def copyContents (src, dest):
 def realCopyContents (src, dest):
     global commitFileNo, fs
     if lastCommit != None:
-        os.chdir (currentDir)
-        os.chdir (incDir)
-        filename = patchDirectory
-        filename += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        filename = "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        filename = os.path.join (patchDirectory, filename)
         commitFileNo += 1
         oprintf ("# real copy contents\n")
+        chIncDir ()
         safeSystem ("git show %s:%s > %s", lastCommit, src, filename)
         if isAllowed (dest):
             dest = stripAllowed (dest)
@@ -226,7 +254,6 @@ def realCopyContents (src, dest):
             dest = fs[dest]
             makeDir (extractPath (dest))
         oprintf ("cp -p %s %s || error cp %s %s\n", filename, dest, filename, dest)
-        os.chdir (currentDir)
         correctPermissions (src, dest)
         output.flush ()
     return dest
@@ -244,18 +271,16 @@ def copyKnown (src, dest):
     global commitFileNo
     if lastCommit != None:
         oprintf ("# copy known\n")
-        filename = patchDirectory
-        filename += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        filename = "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        filename = os.path.join (patchDirectory, filename)
         commitFileNo += 1
-        os.chdir (currentDir)
-        os.chdir (incDir)
+        chIncDir ()
         safeSystem ("git show %s:%s > %s", lastCommit, src, filename)
         makeDir (extractPath (dest))
         oprintf ("cp -p %s %s || error cp %s %s\n", filename, dest, filename, dest)
         correctPermissions (src, dest)
         oprintf ("git add %s\n", dest)
         output.flush ()
-        os.chdir (currentDir)
 
 
 def makeDir (path):
@@ -354,15 +379,14 @@ def create (fullname):
     else:
         fs[fullname] = os.path.join (os.path.join (altDir, path), filename)
         oprintf ("#   held temporarily in %s\n", fs[fullname])
-        patchfile = patchDirectory
-        patchfile += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        patchfile = "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        patchfile = os.path.join (patchDirectory, patchfile)
         commitFileNo += 1
-        os.chdir (currentDir)
-        os.chdir (incDir)
+        chIncDir ()
         safeSystem ("git show %s:%s > %s", lastCommit, fullname, patchfile)
         makeDir (extractPath (fs[fullname]))
-        oprintf ("cp -p %s %s || error cp %s %s\n", patchfile, fs[fullname],  patchfile, fs[fullname])
-        os.chdir (currentDir)
+        oprintf ("cp -p %s %s || error cp %s %s\n", patchfile, fs[fullname], patchfile, fs[fullname])
+        chCurDir ()
         correctPermissions (fullname, fs[fullname])
         oprintf ("git add %s\n", fs[fullname])
     oprintf ("# completed create\n")
@@ -455,9 +479,10 @@ def makeMv (src, dest):
 def restoreFile (oldrepro, combined):
     global commitFileNo, fs
     if lastCommit != None:
-        filename = patchDirectory
-        filename += "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        filename = "%06d-%02d.contents" % (commitPatchNo, commitFileNo)
+        filename = os.path.join (patchDirectory, filename)
         commitFileNo += 1
+        chIncDir ()
         safeSystem ("git show %s:%s > %s", lastCommit, oldrepro, filename)
         makeDir (extractPath (combined))
         oprintf ("cp -p %s %s || error cp %s %s\n", filename, combined, filename, combined)
@@ -549,8 +574,8 @@ def realCommit (rsa):
     addAll ("gcc/m2")
     addAll ("gcc/testsuite")
     lastCommit = rsa
-    filename = patchDirectory
-    filename += "%06d.commit-log" % (commitPatchNo)
+    filename = "%06d.commit-log" % (commitPatchNo)
+    filename = os.path.join (patchDirectory, filename)
     f = open (filename, 'w')
     f.write (commitLog)
     f.close ()
@@ -580,8 +605,8 @@ def realCommit (rsa):
 
 def pseudoCommit (rsa):
     lastCommit = rsa
-    filename = patchDirectory
-    filename += "%06d.commit-log" % (commitPatchNo)
+    filename = "%06d.commit-log" % (commitPatchNo)
+    filename = os.path.join (patchDirectory, filename)
     finishPatch ()
     initPatch ()
     commitLog = ""
@@ -594,4 +619,19 @@ def nextCommit (rsa):
     lastCommit = rsa
 
 
-# create ("dir/this/that/file.c")
+def performCombine ():
+    chCurDir ()
+    patchList = glob.glob ("%s/*.sh" % (patchDirectory))
+    patchList.sort ()
+    chDesDir ()
+    count = 0
+    total = 0
+    for p in reversed (patchList):
+        safeSystem ("pwd")
+        safeSystem ("bash %s", p)
+        safeSystem ("pwd")
+        count += 1
+        total += 1
+        if count == 10:
+            printf ("total scripts applied: %d\n", total)
+            count = 0

@@ -1,5 +1,28 @@
 #!/usr/bin/env python3
 
+# configure.py a configuration module used by git-combine
+#
+# Copyright (C) 2020 Free Software Foundation, Inc.
+# Contributed by Gaius Mulley <gaius@glam.ac.uk>.
+#
+# This file is part of git-combine.
+#
+# git-combine is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3, or (at your option)
+# any later version.
+#
+# git-combine is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with GNU Modula-2; see the file COPYING.  If not, write to the
+# Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.
+#
+
 
 import fsalias
 import os, sys
@@ -11,7 +34,7 @@ reservedTokens = ["des", "inc", "patchdir", "patches",
 
 tokens = []
 fileName, lineNumber = None, 1
-debugging = True
+debugging = False
 desGit = None
 incGit = None
 currentDir = None
@@ -41,7 +64,6 @@ def syntaxError (message):
 def safeSystem (format, *args):
     command = str (format) % args
     command += "\n"
-    printf ("command: %s", command)
     if os.system (command) != 0:
         printf ("error: system (%s) failed\n", command)
         sys.exit (1)
@@ -72,8 +94,6 @@ def tokeniseString (line):
     line = " " + line + " "
     for token in reservedTokens:
         line = line.replace (" " + token + " ", " <" + token + "> ")
-    printf ("line\n")
-    print (line.split ())
     return line.split ()
 
 
@@ -83,12 +103,9 @@ def tokeniseLine (line):
     line = line.rstrip ()
     orig = line
     line = line.split ("#")[0]
-    printf ("line = %s\n", line)
     i = line.find ('"""')
     while i >= 0:
-        printf ("string at = %d\n", i)
         during = line[i+3:]
-        printf ("during = %s\n", during)
         j = during.find ('"""')
         if j >= 0:
             during = during[:j]
@@ -111,8 +128,10 @@ def tokeniseLine (line):
 #
 
 def pushTokens (lines):
+    global tokens
     for line in lines:
         tokeniseLine (line)
+    tokens += ["<eof>"]
 
 
 #
@@ -260,17 +279,17 @@ def patchDirDef ():
 
 def patchesDef ():
     if eat ("<patches>"):
-        os.chdir (currentDir)
         createPatchesFunc ()
 
 
 def combineDef ():
     if eat ("<combine>"):
-        performCombine ()
+        fsalias.performCombine ()
+
 
 def getString ():
     global tokens
-    printf ("checking for a string: %s\n", tokens[0])
+    # printf ("checking for a string: %s\n", tokens[0])
     if (not isToken ("<eof>")) and (not isToken ("<lf>")):
         if (len (tokens[0]) > 3) and (tokens[0][:3] == '"""'):
             if (len (tokens) > 6) and (tokens[0][-3:] == '"""'):
@@ -283,7 +302,7 @@ def getString ():
 def gitDef ():
     if eat ("<git>"):
         s = getString ()
-        printf ("string = %s\n", s)
+        # printf ("string = %s\n", s)
         safeSystem ("git %s", s)
         return True
     return False
@@ -313,6 +332,7 @@ def prependDef ():
             rsahash = getHash ()
         else:
             rsahash = None
+        # printf ("prepend %s %s\n", directory, rsahash)
         fsalias.prependDir (directory, rsahash)
         return True
     return False
@@ -326,9 +346,10 @@ def allowedDef ():
         return True
     return False
 
+
 def ebnf ():
     while not isToken ("<eof>"):
-        printf ("tokens[0] = %s\n", tokens[0])
+        # printf ("tokens[0] = %s\n", tokens[0])
         if desDef ():
             pass
         elif incDef ():
@@ -352,10 +373,11 @@ def ebnf ():
         elif logDef ():
             pass
         else:
-            printf ("remaining tokens: ")
-            print (tokens)
-            printf ("\n")
+            # printf ("remaining tokens: ")
+            # print (tokens)
+            # printf ("\n")
             syntaxError ("unexpected token: " + tokens[0])
+
 
 def config (name, findLog, createPatch, setPatch):
     global currentDir, findLogFunc, createPatchesFunc, setPatchDirFunc
@@ -366,6 +388,6 @@ def config (name, findLog, createPatch, setPatch):
     readFile (name)
     currentDir = os.getcwd ()
     fsalias.setCurrentDir (currentDir)
-    print (tokens)
+    # print (tokens)
     # sys.exit (0)
     return ebnf ()

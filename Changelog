@@ -1,5 +1,10 @@
 20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
 
+	* debianized the repository and also added many
+	  standard configure and Makefile.am components.
+
+20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
+
 	* first working version of the source code.
 
 20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
