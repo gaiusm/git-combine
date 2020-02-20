@@ -2,7 +2,8 @@
 
 	* git-combine.in:  completed first implementation.
 	* combine.py:  removed debugging prints and added
-	  -V version option.
+          -V version option.
+	* fsalias.py:  write the commit message in utf-8.
 
 20-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
 

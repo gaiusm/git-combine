@@ -576,8 +576,8 @@ def realCommit (rsa):
     lastCommit = rsa
     filename = "%06d.commit-log" % (commitPatchNo)
     filename = os.path.join (patchDirectory, filename)
-    f = open (filename, 'w')
-    f.write (commitLog)
+    f = open (filename, 'wb')
+    f.write (commitLog.encode("utf-8"))
     f.close ()
     command = "git commit"
     if commitDate != None:
