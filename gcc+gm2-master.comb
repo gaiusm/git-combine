@@ -16,12 +16,13 @@ in des do
    git """checkout gm2-master"""
    safedir """gcc/m2/pre"""
    prepend """gcc-version/gcc/gm2""" until """d493ab1cc34f7d11ec79387bbd0b375c8494a644"""
-   allowed """gcc-versionno""" """libgm2"""   
+   allowed """gcc-versionno""" """libgm2"""
    allowed """gcc-versionno""" """gcc/m2"""
    allowed """gcc-versionno""" """gcc/gm2"""
    allowed """gcc-versionno""" """gcc/testsuite/gm2"""
    allowed """gcc-versionno""" """gcc/testsuite/lib"""
    allowed """gcc-versionno""" """gcc/testsuite/libgm2"""
+   shell """echo "hello world" """
 
 in inc do
    patches

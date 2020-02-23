@@ -29,7 +29,8 @@ import os, sys
 
 
 reservedTokens = ["des", "inc", "patchdir", "patches",
-                  "combine", "git", "safedir", "prepend", "allowed",
+                  "combine", "git", "safedir", "shell",
+                  "prepend", "allowed",
                   "log", "in", "do", "until"]
 
 tokens = []
@@ -259,7 +260,6 @@ def inDef ():
 
 def desDef ():
     if eat ("<des>"):
-        printf ("desDef\n")
         return setDes (getDirectory ())
     return False
 
@@ -346,6 +346,17 @@ def allowedDef ():
         return True
     return False
 
+#
+#  shellDef :- "shell" string
+#
+
+def shellDef ():
+    if eat ("<shell>"):
+        command = getString ()
+        safeSystem (command)
+        return True
+    return False
+
 
 def ebnf ():
     while not isToken ("<eof>"):
@@ -371,6 +382,8 @@ def ebnf ():
         elif inDef ():
             pass
         elif logDef ():
+            pass
+        elif shellDef ():
             pass
         else:
             # printf ("remaining tokens: ")
