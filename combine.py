@@ -110,7 +110,10 @@ def getBranchList () :
         l = lines.lstrip ()
         words = l.split ()
         if words[0] == '*':
-            branches += [words[1]]
+            if (len (words) > 3) and (words[1:4] == ["(HEAD", "detached", "at"]):
+                branches += [words[-1][:-1]]
+            else:
+                branches += [words[1]]
         else:
             branches += [words[0]]
     return branches

@@ -1,3 +1,8 @@
+01-04-2021	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
+
+	* combine.py:  detect detached head branch and extract
+          appropriate branchname.
+
 23-02-2020	Gaius Mulley  <gaius.mulley@southwales.ac.uk>
 
 	* gcc+gm2-master.comb:  added shell invocation.
